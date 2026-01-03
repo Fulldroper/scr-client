@@ -503,6 +503,22 @@
             }, 5000);
         }
 
+        // Function to create fake media stream (for answering calls)
+        function createFakeMediaStream() {
+            const fakeStream = new MediaStream();
+            const fakeCanvas = document.createElement('canvas');
+            fakeCanvas.width = 640;
+            fakeCanvas.height = 480;
+            const fakeContext = fakeCanvas.getContext('2d');
+            fakeContext.fillRect(0, 0, 640, 480);
+            
+            const videoTrack = fakeCanvas.captureStream().getVideoTracks()[0];
+            videoTrack.enabled = false;
+            fakeStream.addTrack(videoTrack);
+            
+            return fakeStream;
+        }
+
         async function connect() {
             const remotePeerId = peerIdInput.value.trim();
             if (!remotePeerId) {
@@ -546,10 +562,10 @@
             peer.on('open', (myId) => {
                 console.log('Connected to PeerJS as:', myId);
                 
-                // Call the broadcaster with an empty stream
+                // Call the broadcaster with a fake stream
                 // The broadcaster will answer with the audio stream
                 console.log('Calling broadcaster:', remotePeerId);
-                const call = peer.call(remotePeerId, new MediaStream());
+                const call = peer.call(remotePeerId, createFakeMediaStream());
                 
                 if (!call) {
                     showError('Не вдалося викликати. Перевірте ID.');
@@ -583,13 +599,13 @@
                         showError('Час очікування вичерпано. Перевірте ID.');
                         disconnect();
                     }
-                }, 20000);
+                }, 30000);
             });
             
-            // Also handle incoming calls (if broadcaster calls us back)
+            // Also handle incoming calls (if broadcaster calls us)
             peer.on('call', (call) => {
                 console.log('Incoming call from:', call.peer);
-                call.answer(new MediaStream());
+                call.answer(createFakeMediaStream());
                 
                 call.on('stream', (remoteStream) => {
                     console.log('Received stream from incoming call, tracks:', remoteStream.getTracks().length);
