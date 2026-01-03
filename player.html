@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🎵 Аудіо Плеєр</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1E1E1E;
+            --bg-tertiary: #2D2D2D;
+            --text-primary: #E4E4E4;
+            --text-secondary: #A0A0A0;
+            --accent-blue: #0078D4;
+            --accent-green: #43B581;
+            --accent-red: #F04747;
+            --border-color: #3D3D3D;
+            --radius: 12px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Status indicator */
+        .status-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-red);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: var(--accent-green);
+        }
+
+        .status-dot.connecting {
+            background: #FFC107;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+        }
+
+        .status-text {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* Connect form */
+        .connect-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 18px;
+            font-family: monospace;
+            text-align: center;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .form-group input::placeholder {
+            letter-spacing: normal;
+            text-transform: none;
+            color: var(--text-secondary);
+        }
+
+        .connect-btn {
+            padding: 16px 32px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .connect-btn:hover:not(:disabled) {
+            background: #106EBE;
+            transform: translateY(-2px);
+        }
+
+        .connect-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .connect-btn.danger {
+            background: var(--accent-red);
+        }
+
+        .connect-btn.danger:hover {
+            background: #D84040;
+        }
+
+        /* Audio player */
+        .player-section {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .player-section.active {
+            display: flex;
+        }
+
+        .visualizer-container {
+            position: relative;
+            height: 100px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #visualizer {
+            width: 100%;
+            height: 100%;
+        }
+
+        .now-playing {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--accent-blue)22, var(--accent-green)22);
+            border-radius: 8px;
+        }
+
+        .now-playing-icon {
+            font-size: 24px;
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .now-playing-text {
+            font-weight: 500;
+        }
+
+        /* Volume control */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+        }
+
+        .volume-icon {
+            font-size: 20px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .volume-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .volume-value {
+            min-width: 45px;
+            text-align: right;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Info section */
+        .info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-family: monospace;
+        }
+
+        /* Error message */
+        .error-message {
+            display: none;
+            padding: 12px 16px;
+            background: rgba(240, 71, 71, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 8px;
+            color: var(--accent-red);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 16px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .logo {
+                font-size: 48px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎧</div>
+            <h1>Аудіо Плеєр</h1>
+            <p class="subtitle">Підключіться до трансляції</p>
+        </div>
+
+        <div class="card">
+            <!-- Status -->
+            <div class="status-section">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Відключено</span>
+            </div>
+
+            <!-- Error message -->
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Connect form -->
+            <div class="connect-form" id="connectForm">
+                <div class="form-group">
+                    <label for="peerId">ID трансляції</label>
+                    <input 
+                        type="text" 
+                        id="peerId" 
+                        placeholder="SCR-XXXXXX"
+                        maxlength="10"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="characters"
+                        spellcheck="false"
+                    />
+                </div>
+                <button class="connect-btn" id="connectBtn" onclick="connect()">
+                    <span>📡</span>
+                    <span>Підключитися</span>
+                </button>
+            </div>
+
+            <!-- Player section (shown when connected) -->
+            <div class="player-section" id="playerSection">
+                <div class="now-playing">
+                    <span class="now-playing-icon">🔊</span>
+                    <span class="now-playing-text">Відтворення аудіо...</span>
+                </div>
+
+                <div class="visualizer-container">
+                    <canvas id="visualizer"></canvas>
+                </div>
+
+                <div class="volume-control">
+                    <span class="volume-icon" id="volumeIcon">🔊</span>
+                    <input 
+                        type="range" 
+                        class="volume-slider" 
+                        id="volumeSlider" 
+                        min="0" 
+                        max="100" 
+                        value="100"
+                        oninput="updateVolume(this.value)"
+                    />
+                    <span class="volume-value" id="volumeValue">100%</span>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Підключено до:</span>
+                        <span class="info-value" id="connectedTo">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Тривалість:</span>
+                        <span class="info-value" id="duration">00:00</span>
+                    </div>
+                </div>
+
+                <button class="connect-btn danger" onclick="disconnect()">
+                    <span>⏹️</span>
+                    <span>Відключитися</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="footer">
+            Sound Capture Restream • WebRTC Audio
+        </div>
+    </div>
+
+    <!-- Hidden audio element -->
+    <audio id="audioPlayer" autoplay></audio>
+
+    <script>
+        // Elements
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const errorMessage = document.getElementById('errorMessage');
+        const connectForm = document.getElementById('connectForm');
+        const playerSection = document.getElementById('playerSection');
+        const peerIdInput = document.getElementById('peerId');
+        const connectBtn = document.getElementById('connectBtn');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const volumeValue = document.getElementById('volumeValue');
+        const connectedToEl = document.getElementById('connectedTo');
+        const durationEl = document.getElementById('duration');
+        const visualizerCanvas = document.getElementById('visualizer');
+
+        // State
+        let peer = null;
+        let mediaConnection = null;
+        let audioContext = null;
+        let analyser = null;
+        let animationId = null;
+        let startTime = null;
+        let durationInterval = null;
+
+        // Check for peer ID in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlPeerId = urlParams.get('peer');
+        if (urlPeerId) {
+            peerIdInput.value = urlPeerId;
+            // Auto-connect after a short delay
+            setTimeout(() => connect(), 500);
+        }
+
+        // Format peer ID as user types
+        peerIdInput.addEventListener('input', (e) => {
+            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+            e.target.value = value;
+        });
+
+        // Connect on Enter key
+        peerIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') connect();
+        });
+
+        function setStatus(status, text) {
+            statusDot.className = 'status-dot ' + status;
+            statusText.textContent = text;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            setTimeout(() => {
+                errorMessage.classList.remove('show');
+            }, 5000);
+        }
+
+        function connect() {
+            const remotePeerId = peerIdInput.value.trim();
+            if (!remotePeerId) {
+                showError('Введіть ID трансляції');
+                return;
+            }
+
+            connectBtn.disabled = true;
+            setStatus('connecting', 'Підключення...');
+            hideError();
+
+            // ICE servers for better connectivity
+            // Using free relay servers from https://www.metered.ca/tools/openrelay/
+            const iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun.relay.metered.ca:80' },
+                { 
+                    urls: 'turn:global.relay.metered.ca:80',
+                    username: 'e8dd65b92dce836ab3efa728',
+                    credential: 'H5QvYVuvLjhg/WP+'
+                },
+                { 
+                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                    username: 'e8dd65b92dce836ab3efa728',
+                    credential: 'H5QvYVuvLjhg/WP+'
+                },
+                { 
+                    urls: 'turn:global.relay.metered.ca:443',
+                    username: 'e8dd65b92dce836ab3efa728',
+                    credential: 'H5QvYVuvLjhg/WP+'
+                },
+            ];
+
+            // Create our peer (client side)
+            peer = new Peer({
+                debug: 2,
+                config: {
+                    iceServers: iceServers,
+                    sdpSemantics: 'unified-plan'
+                }
+            });
+
+            peer.on('open', (myId) => {
+                console.log('Connected to PeerJS as:', myId);
+                
+                // Call the broadcaster with an empty stream
+                // The broadcaster will answer with the audio stream
+                console.log('Calling broadcaster:', remotePeerId);
+                const call = peer.call(remotePeerId, new MediaStream());
+                
+                if (!call) {
+                    showError('Не вдалося викликати. Перевірте ID.');
+                    disconnect();
+                    return;
+                }
+                
+                call.on('stream', (remoteStream) => {
+                    console.log('Received stream from broadcaster, tracks:', remoteStream.getTracks().length);
+                    handleStream(remoteStream);
+                    showPlayer(remotePeerId);
+                    setStatus('connected', 'Підключено');
+                });
+
+                call.on('close', () => {
+                    console.log('Call closed');
+                    disconnect();
+                });
+
+                call.on('error', (err) => {
+                    console.error('Call error:', err);
+                    showError('Помилка з\'єднання: ' + err.message);
+                    disconnect();
+                });
+
+                mediaConnection = call;
+
+                // Timeout for connection
+                setTimeout(() => {
+                    if (statusDot.classList.contains('connecting')) {
+                        showError('Час очікування вичерпано. Перевірте ID.');
+                        disconnect();
+                    }
+                }, 20000);
+            });
+            
+            // Also handle incoming calls (if broadcaster calls us back)
+            peer.on('call', (call) => {
+                console.log('Incoming call from:', call.peer);
+                call.answer(new MediaStream());
+                
+                call.on('stream', (remoteStream) => {
+                    console.log('Received stream from incoming call, tracks:', remoteStream.getTracks().length);
+                    handleStream(remoteStream);
+                    showPlayer(call.peer);
+                    setStatus('connected', 'Підключено');
+                });
+                
+                mediaConnection = call;
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                let errorMsg = 'Помилка підключення';
+                
+                if (err.type === 'peer-unavailable') {
+                    errorMsg = 'Трансляція не знайдена. Перевірте ID.';
+                } else if (err.type === 'network') {
+                    errorMsg = 'Помилка мережі. Перевірте з\'єднання.';
+                }
+                
+                showError(errorMsg);
+                disconnect();
+            });
+
+            peer.on('disconnected', () => {
+                console.log('Disconnected from server');
+            });
+        }
+
+        function disconnect() {
+            // Stop audio
+            audioPlayer.srcObject = null;
+            audioPlayer.pause();
+
+            // Close connections
+            if (mediaConnection) {
+                mediaConnection.close();
+                mediaConnection = null;
+            }
+
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+
+            // Stop visualizer
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+
+            // Close audio context
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+                analyser = null;
+            }
+
+            // Stop duration timer
+            if (durationInterval) {
+                clearInterval(durationInterval);
+                durationInterval = null;
+            }
+
+            // Reset UI
+            connectBtn.disabled = false;
+            setStatus('', 'Відключено');
+            showConnectForm();
+        }
+
+        function handleStream(stream) {
+            // Play audio
+            audioPlayer.srcObject = stream;
+            audioPlayer.volume = volumeSlider.value / 100;
+            audioPlayer.play().catch(e => {
+                console.log('Autoplay blocked, user interaction required');
+            });
+
+            // Setup visualizer
+            setupVisualizer(stream);
+
+            // Start duration counter
+            startTime = Date.now();
+            durationInterval = setInterval(updateDuration, 1000);
+        }
+
+        function setupVisualizer(stream) {
+            audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const ctx = visualizerCanvas.getContext('2d');
+            const WIDTH = visualizerCanvas.width = visualizerCanvas.offsetWidth * 2;
+            const HEIGHT = visualizerCanvas.height = visualizerCanvas.offsetHeight * 2;
+
+            function draw() {
+                animationId = requestAnimationFrame(draw);
+
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = '#2D2D2D';
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+                const barWidth = (WIDTH / bufferLength) * 2.5;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * HEIGHT;
+                    
+                    // Gradient color based on height
+                    const hue = (i / bufferLength) * 60 + 180; // Blue to cyan
+                    ctx.fillStyle = `hsl(${hue}, 70%, ${40 + barHeight / HEIGHT * 30}%)`;
+                    
+                    ctx.fillRect(x, HEIGHT - barHeight, barWidth - 1, barHeight);
+                    x += barWidth + 1;
+                }
+            }
+
+            draw();
+        }
+
+        function updateVolume(value) {
+            const vol = parseInt(value);
+            audioPlayer.volume = vol / 100;
+            volumeValue.textContent = vol + '%';
+            
+            // Update icon
+            if (vol === 0) {
+                volumeIcon.textContent = '🔇';
+            } else if (vol < 50) {
+                volumeIcon.textContent = '🔉';
+            } else {
+                volumeIcon.textContent = '🔊';
+            }
+        }
+
+        function updateDuration() {
+            if (!startTime) return;
+            
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            durationEl.textContent = 
+                String(minutes).padStart(2, '0') + ':' + 
+                String(seconds).padStart(2, '0');
+        }
+
+        function showPlayer(remotePeerId) {
+            connectForm.style.display = 'none';
+            playerSection.classList.add('active');
+            connectedToEl.textContent = remotePeerId;
+        }
+
+        function showConnectForm() {
+            connectForm.style.display = 'flex';
+            playerSection.classList.remove('active');
+            durationEl.textContent = '00:00';
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+
+        // Handle visibility change - pause/resume audio
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && audioPlayer.srcObject) {
+                // Page hidden, but keep playing
+            }
+        });
+
+        // Wake lock to prevent screen from sleeping (if supported)
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    await navigator.wakeLock.request('screen');
+                } catch (err) {
+                    console.log('Wake lock not available');
+                }
+            }
+        }
+
+        // Request wake lock when playing
+        audioPlayer.addEventListener('play', requestWakeLock);
+    </script>
+</body>
+</html>
