@@ -503,7 +503,7 @@
             }, 5000);
         }
 
-        function connect() {
+        async function connect() {
             const remotePeerId = peerIdInput.value.trim();
             if (!remotePeerId) {
                 showError('Введіть ID трансляції');
@@ -514,35 +514,33 @@
             setStatus('connecting', 'Підключення...');
             hideError();
 
-            // ICE servers for better connectivity
-            // Using free relay servers from https://www.metered.ca/tools/openrelay/
-            const iceServers = [
+            // Fallback STUN servers
+            const fallbackIceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun.relay.metered.ca:80' },
-                { 
-                    urls: 'turn:global.relay.metered.ca:80',
-                    username: 'e8dd65b92dce836ab3efa728',
-                    credential: 'H5QvYVuvLjhg/WP+'
-                },
-                { 
-                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-                    username: 'e8dd65b92dce836ab3efa728',
-                    credential: 'H5QvYVuvLjhg/WP+'
-                },
-                { 
-                    urls: 'turn:global.relay.metered.ca:443',
-                    username: 'e8dd65b92dce836ab3efa728',
-                    credential: 'H5QvYVuvLjhg/WP+'
-                },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
             ];
+
+            // Getting a list of servers
+            let iceServers = fallbackIceServers;
+            try {
+                const turnResponse = await fetch('https://fulldroper.metered.live/api/v1/turn/credentials?apiKey=84c2ac4f108b58ec5e2f01d93134afd08347');
+                const turnServers = await turnResponse.json();
+                if (turnServers && !turnServers.error && Array.isArray(turnServers)) {
+                    iceServers = [...turnServers, ...fallbackIceServers];
+                    console.log('Got TURN servers from API');
+                }
+            } catch (err) {
+                console.warn('TURN server unavailable, using STUN only:', err.message);
+            }
 
             // Create our peer (client side)
             peer = new Peer({
-                debug: 2,
-                config: {
-                    iceServers: iceServers,
-                    sdpSemantics: 'unified-plan'
-                }
+                config: { iceServers },
+                timeout: 120000
             });
 
             peer.on('open', (myId) => {
