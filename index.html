@@ -470,13 +470,13 @@
         let startTime = null;
         let durationInterval = null;
 
-        // Check for peer ID in URL
+        // Check for peer ID in URL - just fill the field, don't auto-connect
         const urlParams = new URLSearchParams(window.location.search);
         const urlPeerId = urlParams.get('peer');
         if (urlPeerId) {
             peerIdInput.value = urlPeerId;
-            // Auto-connect after a short delay
-            setTimeout(() => connect(), 500);
+            // Don't auto-connect - user must click the button
+            // This is required for AudioContext to work (user gesture needed)
         }
 
         // Format peer ID as user types
@@ -714,12 +714,25 @@
             // Play audio
             audioPlayer.srcObject = stream;
             audioPlayer.volume = volumeSlider.value / 100;
-            audioPlayer.play().catch(e => {
-                console.log('Autoplay blocked, user interaction required');
-            });
+            
+            // Try to play - may need user interaction
+            const playPromise = audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    console.log('Autoplay blocked, will play on user interaction');
+                    // Add click handler to start playback
+                    document.body.addEventListener('click', () => {
+                        audioPlayer.play();
+                    }, { once: true });
+                });
+            }
 
-            // Setup visualizer
-            setupVisualizer(stream);
+            // Setup visualizer (also needs user gesture for AudioContext)
+            try {
+                setupVisualizer(stream);
+            } catch (e) {
+                console.warn('Visualizer setup failed:', e);
+            }
 
             // Start duration counter
             startTime = Date.now();
