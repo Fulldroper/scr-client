@@ -503,20 +503,28 @@
             }, 5000);
         }
 
-        // Function to create fake media stream (for answering calls)
+        // Function to create fake AUDIO stream (for initiating calls)
         function createFakeMediaStream() {
-            const fakeStream = new MediaStream();
-            const fakeCanvas = document.createElement('canvas');
-            fakeCanvas.width = 640;
-            fakeCanvas.height = 480;
-            const fakeContext = fakeCanvas.getContext('2d');
-            fakeContext.fillRect(0, 0, 640, 480);
+            // Create AudioContext and silent oscillator
+            const audioCtx = new AudioContext();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const destination = audioCtx.createMediaStreamDestination();
             
-            const videoTrack = fakeCanvas.captureStream().getVideoTracks()[0];
-            videoTrack.enabled = false;
-            fakeStream.addTrack(videoTrack);
+            // Very quiet (nearly silent) but active audio
+            oscillator.frequency.value = 440;
+            gainNode.gain.value = 0.001;
             
-            return fakeStream;
+            oscillator.connect(gainNode);
+            gainNode.connect(destination);
+            oscillator.start();
+            
+            console.log('Created fake audio stream with tracks:', destination.stream.getTracks().length);
+            destination.stream.getTracks().forEach(t => {
+                console.log('Fake track:', t.kind, 'enabled:', t.enabled);
+            });
+            
+            return destination.stream;
         }
 
         async function connect() {
@@ -530,14 +538,10 @@
             setStatus('connecting', 'Підключення...');
             hideError();
 
-            // Fallback STUN servers
+            // Fallback STUN servers (limited to avoid WebRTC warning)
             const fallbackIceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' }
+                { urls: 'stun:stun1.l.google.com:19302' }
             ];
 
             // Getting a list of servers
@@ -574,7 +578,17 @@
                 }
                 
                 call.on('stream', (remoteStream) => {
-                    console.log('Received stream from broadcaster, tracks:', remoteStream.getTracks().length);
+                    console.log('Received stream from broadcaster');
+                    console.log('Stream tracks:', remoteStream.getTracks().length);
+                    remoteStream.getTracks().forEach(t => {
+                        console.log('Track:', t.kind, 'enabled:', t.enabled, 'state:', t.readyState);
+                    });
+                    
+                    if (remoteStream.getTracks().length === 0) {
+                        console.warn('Received empty stream!');
+                        return;
+                    }
+                    
                     handleStream(remoteStream);
                     showPlayer(remotePeerId);
                     setStatus('connected', 'Підключено');
@@ -608,10 +622,29 @@
                 call.answer(createFakeMediaStream());
                 
                 call.on('stream', (remoteStream) => {
-                    console.log('Received stream from incoming call, tracks:', remoteStream.getTracks().length);
+                    console.log('Received stream from incoming call');
+                    console.log('Stream tracks:', remoteStream.getTracks().length);
+                    remoteStream.getTracks().forEach(t => {
+                        console.log('Track:', t.kind, 'enabled:', t.enabled, 'state:', t.readyState);
+                    });
+                    
+                    if (remoteStream.getTracks().length === 0) {
+                        console.warn('Received empty stream from incoming call!');
+                        return;
+                    }
+                    
                     handleStream(remoteStream);
                     showPlayer(call.peer);
                     setStatus('connected', 'Підключено');
+                });
+                
+                call.on('close', () => {
+                    console.log('Incoming call closed');
+                    disconnect();
+                });
+                
+                call.on('error', (err) => {
+                    console.error('Incoming call error:', err);
                 });
                 
                 mediaConnection = call;
